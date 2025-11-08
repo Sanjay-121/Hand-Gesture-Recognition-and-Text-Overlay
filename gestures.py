@@ -4,7 +4,10 @@ import mediapipe as mp
 
 # Step 2: Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands()
+hands = mp_hands.Hands(static_image_mode=False,
+                       max_num_hands=1,
+                       min_detection_confidence=0.5,
+                       min_tracking_confidence=0.5)
 mp_draw = mp.solutions.drawing_utils
 
 # Step 3: Initialize Video Capture
@@ -16,7 +19,6 @@ while cap.isOpened():
     if not ret:
         break
 
-    # Flip the frame horizontally for a later selfie-view display
     frame = cv2.flip(frame, 1)
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(frame_rgb)
@@ -25,30 +27,59 @@ while cap.isOpened():
         for hand_landmarks in results.multi_hand_landmarks:
             mp_draw.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            # Initialize list to store landmark coordinates
+            # Get landmark coordinates
             landmark_list = []
-            for id, lm in enumerate(hand_landmarks.landmark):
-                # Get the coordinates
-                h, w, c = frame.shape
+            h, w, c = frame.shape
+            for lm in hand_landmarks.landmark:
                 cx, cy = int(lm.x * w), int(lm.y * h)
                 landmark_list.append([cx, cy])
 
-            # Gesture recognition logic
-            if len(landmark_list) != 0:
-                # Example logic for gesture recognition
-                # Open Hand (Palm) Gesture
-                if landmark_list[4][1] < landmark_list[3][1] and landmark_list[8][1] < landmark_list[6][1]:
-                    gesture = "My First Project"
-                # Pointing Up Gesture
-                elif landmark_list[4][1] > landmark_list[3][1] and landmark_list[8][1] < landmark_list[6][1]:
-                    gesture = "Thank You"
-                else:
-                    gesture = None
+            # Ensure all landmarks are available
+            if len(landmark_list) == 21:
+                gesture = None
+                gesture2 = None
 
-                # Display the corresponding text
+                # --- INDEX FINGER UP (This is my first ML project) ---
+                if (landmark_list[8][1] < landmark_list[6][1] and  # Index up
+                    landmark_list[12][1] > landmark_list[10][1] and
+                    landmark_list[16][1] > landmark_list[14][1] and
+                    landmark_list[20][1] > landmark_list[18][1]):
+                    gesture = "THIS IS MY"
+                    gesture2 = "FIRST ML PROJECT"
+
+                # --- THUMB UP (Thanks) ---
+                elif (landmark_list[4][1] < landmark_list[3][1] and  # Thumb up
+                      landmark_list[8][1] > landmark_list[6][1] and
+                      landmark_list[12][1] > landmark_list[10][1] and
+                      landmark_list[16][1] > landmark_list[14][1] and
+                      landmark_list[20][1] > landmark_list[18][1]):
+                    gesture = "THANKS"
+
+                # --- Display Text with Auto-Resizing Box ---
                 if gesture:
-                    cv2.putText(frame, gesture, (landmark_list[0][0] - 50, landmark_list[0][1] - 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3, cv2.LINE_AA)  # Increased fontScale and thickness
+                    # Measure text sizes
+                    (text_w1, text_h1), _ = cv2.getTextSize(gesture, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 3)
+                    box_w = text_w1 + 40
+                    box_h = text_h1 + 50
+
+                    if gesture2:
+                        (text_w2, text_h2), _ = cv2.getTextSize(gesture2, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 3)
+                        box_w = max(box_w, text_w2 + 40)
+                        box_h += text_h2 + 20  # increase height for second line
+
+                    # Box position
+                    x, y = landmark_list[0][0] - 150, landmark_list[0][1] - 130
+                    overlay = frame.copy()
+                    cv2.rectangle(overlay, (x, y), (x + box_w, y + box_h), (0, 0, 0), -1)
+                    alpha = 0.5
+                    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                    # Draw text
+                    cv2.putText(frame, gesture, (x + 20, y + 45),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
+                    if gesture2:
+                        cv2.putText(frame, gesture2, (x + 20, y + 95),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
     # Step 5: Display the Frame
     cv2.imshow('Hand Gesture Recognition', frame)
